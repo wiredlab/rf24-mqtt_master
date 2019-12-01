@@ -122,6 +122,9 @@ void check_wifi()
  */
 void check_mqtt()
 {
+  // This tool helps compute the space to reserve
+  // https://arduinojson.org/v6/assistant/
+  //    --> don't forget to estimate the payload string lengths
   const size_t json_capacity = JSON_OBJECT_SIZE(3) + 128;
 
   if (mqtt.connected()) { return; }
@@ -315,6 +318,9 @@ void loop() {
     json["type"] = header.type;
     json["payload"] = payload;
     
+    // serializeJson needs a stream
+    // but we ultimately need a buffer of bytes
+    // is this way too slow?  hasn't been an issue yet
     String msg;
     msg.reserve(measureJson(json));
     serializeJson(json, msg);
@@ -328,7 +334,7 @@ void loop() {
     Serial.println(msg);
   }
 
-  // display the routing table
+  // display the routing table periodically
   static uint32_t displayTimer = 0;
   if(millis() - displayTimer > 5000){
     displayTimer = millis();
