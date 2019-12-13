@@ -11,7 +11,9 @@
 
 #include <ESP8266WiFi.h>
 #include <ESP8266WiFiMulti.h>
-#include <PubSubClient.h>
+
+#define MQTT_MAX_PACKET_SIZE 1024
+#include "PubSubClient.h"
 
 #include <WiFiUdp.h>
 #include <NTPClient.h>
