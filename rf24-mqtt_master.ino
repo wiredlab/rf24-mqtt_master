@@ -179,9 +179,9 @@ void mqtt_receive_callback(char* topic, byte* payload, unsigned int length) {
 
   // Switch on the LED if an 1 was received as first character
   if ((char)payload[0] == '1') {
-    led_state = 1;
+    ledOn();
   } else {
-    led_state = 0;
+    ledOff();
   }
 
   // this will effectively be a half-blink, forcing the LED to the
@@ -189,6 +189,17 @@ void mqtt_receive_callback(char* topic, byte* payload, unsigned int length) {
   nBlinks += 1;
 }
 
+/*
+ * Abstract LED state
+ * this changes depending if LED is active low or active high
+ */
+void ledOn(void) {
+  led_state = 0;  //active low
+}
+
+void ledOff(void) {
+  led_state = 1;  //active low
+}
 
 
 /*
