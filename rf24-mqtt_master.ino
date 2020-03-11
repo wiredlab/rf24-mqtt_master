@@ -1,13 +1,12 @@
 /* 
  *  ESP8266-based rf24 gateway to MQTT
  *  
- *  NodeMCU 1.0 board
+ *  board: NodeMCU 1.0
  */
  
 #include <SPI.h>
 #include <RF24.h>
 #include <RF24Network.h>
-#include <RF24Mesh.h>
 
 #include <ESP8266WiFi.h>
 #include <ESP8266WiFiMulti.h>
@@ -32,7 +31,7 @@
  */
 // LED blinking
 int nBlinks = 0;
-bool led_state = 0;
+bool led_state = 1;  // active low
 
 struct tm timeinfo;
 
@@ -43,7 +42,6 @@ String msg_topic;
 
 RF24 radio(RF24_CE_PIN, RF24_CS_PIN);
 RF24Network network(radio);
-RF24Mesh mesh(radio, network);
 
 WiFiClient wifi;
 ESP8266WiFiMulti wifiMulti;  // use multiple wifi options
@@ -227,6 +225,9 @@ void setup() {
   Serial.begin(115200);
   Serial.println();
 
+  pinMode(LED_PIN, OUTPUT);
+  digitalWrite(LED_PIN, led_state);
+
   /*
    * setup WiFi
    */
@@ -256,24 +257,30 @@ void setup() {
    */
   mqtt.setServer(MQTT_SERVER, MQTT_PORT);
   mqtt.setCallback(mqtt_receive_callback);
+  Serial.println("MQTT setup.");
 
 
   /*
    * setup NTP time sync
    */
   ntpClient.begin();
-
+  Serial.println("NTP setup.");
 
   /*
-   * setup RF24 mesh
+   * setup RF24Network
    */
-  // Set the nodeID to 0 for the master node
-  mesh.setNodeID(0);
-
-  // Connect to the mesh
-  mesh.begin();
-  mesh.setChannel(RF24_CHANNEL);
-
+   SPI.begin();
+   radio.begin();
+   network.begin(RF24_CHANNEL, 00);  // master node is address zero
+   Serial.println("RF24Network setup.");
+   while (!radio.isChipConnected()) {
+    Serial.println("rf24 not connected");
+    delay(1000);
+    radio.begin();
+    delay(100);
+    network.begin(RF24_CHANNEL, 00);
+    delay(100);
+   }
 }
 
 
@@ -286,23 +293,20 @@ void loop() {
   
   ntpClient.update();
   
-  // Call mesh.update to keep the network updated
-  mesh.update();
+  // Keep the network updated
+  network.update();
   
-  // In addition, keep the 'DHCP service' running on the master node so
-  // addresses will be assigned to the sensor nodes
-  mesh.DHCP();
-
   // LED blinking without using delays
   do_blink();
-  
-  
+
   // Check for incoming data from the sensors
   if (network.available()) {
     RF24NetworkHeader header;
     uint8_t buf[MAX_PAYLOAD_SIZE];  // as configured in RF24Network_config.h
     uint16_t payload_len;
 
+    Serial.print("message ");
+    
     payload_len = network.read(header, &buf, sizeof(buf));
 
     String payload = hexToStr(buf, payload_len);
@@ -312,9 +316,7 @@ void loop() {
     json["channel"] = RF24_CHANNEL;
     json["time"] = getIsoTime();
     json["from_addr"] = String(header.from_node, OCT);
-    json["from_id"] = mesh.getNodeID(header.from_node);
     json["to_addr"] = String(header.to_node, OCT);
-    json["to_id"] = mesh.getNodeID(header.to_node);
     json["type"] = header.type;
     json["payload"] = payload;
     
@@ -332,20 +334,5 @@ void loop() {
     nBlinks += 1;
 
     Serial.println(msg);
-  }
-
-  // display the routing table periodically
-  static uint32_t displayTimer = 0;
-  if(millis() - displayTimer > 5000){
-    displayTimer = millis();
-    Serial.println(" ");
-    Serial.println(F("********Assigned Addresses********"));
-     for(int i=0; i<mesh.addrListTop; i++){
-       Serial.print("NodeID: ");
-       Serial.print(mesh.addrList[i].nodeID);
-       Serial.print(" RF24Network Address: 0");
-       Serial.println(mesh.addrList[i].address,OCT);
-     }
-    Serial.println(F("**********************************"));
   }
 }
